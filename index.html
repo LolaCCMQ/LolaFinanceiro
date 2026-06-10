@@ -138,6 +138,7 @@
   </div>
   <div class="topnav">
     <button class="tnav active" id="nav-lanc" onclick="showView('lanc')">📒 Lançamentos</button>
+    <button class="tnav" id="nav-notas" onclick="showView('notas')">📄 Notas fiscais</button>
     <button class="tnav" id="nav-fech" onclick="showView('fech')">📊 Fechamento do mês</button>
     <button class="tnav" id="nav-plano" onclick="showView('plano')">🗂️ Plano de contas</button>
   </div>
@@ -158,6 +159,7 @@ let ADMIN={name:'', hash:''};
 let UNIT='mac';
 let VIEW='lanc';
 let LANC=[];
+let NOTAS=[];
 let PLANO=[];
 let fechMes = new Date().toISOString().slice(0,7);
 
@@ -260,11 +262,12 @@ async function carregar(){
   document.getElementById('main').innerHTML='<div class="spin"></div>';
   try{ LANC=await rpc('fin_lancamentos_list',{p_unit:UNIT}) || []; }
   catch(e){ LANC=[]; toast('Erro ao carregar lançamentos'); }
+  try{ NOTAS=await rpc('fin_notas_list',{p_unit:UNIT}) || []; }catch(e){ NOTAS=[]; }
   render();
 }
 function setUnit(u){ UNIT=u; SEL.clear(); document.getElementById('u-mac').classList.toggle('active',u==='mac'); document.getElementById('u-ccmq').classList.toggle('active',u==='ccmq'); carregar(); }
-function showView(v){ VIEW=v; ['lanc','fech','plano'].forEach(x=>document.getElementById('nav-'+x).classList.toggle('active',x===v)); render(); }
-function render(){ if(VIEW==='lanc')renderLanc(); else if(VIEW==='fech')renderFech(); else renderPlano(); }
+function showView(v){ VIEW=v; ['lanc','notas','fech','plano'].forEach(x=>document.getElementById('nav-'+x).classList.toggle('active',x===v)); render(); }
+function render(){ if(VIEW==='lanc')renderLanc(); else if(VIEW==='notas')renderNotas(); else if(VIEW==='fech')renderFech(); else renderPlano(); }
 
 function catOptions(sel){
   let h='<option value="">— categorizar —</option>';
@@ -299,7 +302,7 @@ function renderLanc(){
       '<td style="text-align:right" class="'+(l.amount<0?'val-neg':'val-pos')+'">'+R(l.amount)+'</td>'+
       '<td><button class="catbtn'+(l.category?' catbtn-set':' catbtn-empty')+'" onclick="openCatPicker(event,\''+l.id+'\')">'+(l.category?esc(catLabel(l.category)):'— categorizar —')+'</button></td>'+
       '<td><input class="in" style="width:120px;padding:4px 6px" value="'+esc(l.note||'')+'" placeholder="..." onchange="setNote(\''+l.id+'\',this.value)"></td>'+
-      '<td style="white-space:nowrap">'+((l.fitid&&l.fitid.indexOf('NFE:')===0)?'<button class="btn btn-g btn-sm" onclick="verNota(\''+l.fitid.slice(4)+'\')" title="Ver nota">📄</button> ':'')+'<button class="btn btn-g btn-sm" onclick="modalManual(\''+l.id+'\')">✏️</button> <button class="btn btn-d btn-sm" onclick="delLanc(\''+l.id+'\')">🗑</button></td>'+
+      '<td style="white-space:nowrap">'+(l.nota_chave?'<button class="btn btn-g btn-sm" onclick="verNota(\''+l.nota_chave+'\')" title="Ver nota vinculada">📄</button> ':'')+'<button class="btn btn-g btn-sm" onclick="modalManual(\''+l.id+'\')">✏️</button> <button class="btn btn-d btn-sm" onclick="delLanc(\''+l.id+'\')">🗑</button></td>'+
       '</tr>';
   });
   h+='</tbody></table>';
@@ -535,16 +538,14 @@ async function importarNFe(files){
       var xml=await files[i].text();
       var nf=parseNFe(xml);
       if(!nf||!nf.chave){ errN++; continue; }
-      var fitid='NFE:'+nf.chave;
-      if(LANC.some(function(l){return l.fitid===fitid;})){ dupN++; continue; }
+      if(NOTAS.some(function(n){return n.chave===nf.chave;})){ dupN++; continue; }
       await rpc('fin_nota_save',{p:{chave:nf.chave,unit:UNIT,emitente:nf.emitente,cnpj:nf.cnpj,numero:nf.numero,data_emissao:nf.dataEmissao,valor_total:nf.total,vencimentos:nf.vencimentos,itens:nf.itens}});
-      var dataLanc=(nf.vencimentos[0]&&nf.vencimentos[0].data)||nf.dataEmissao;
-      await saveLanc({unit:UNIT,fitid:fitid,date:dataLanc,competencia:(nf.dataEmissao||dataLanc||'').slice(0,7),memo:(nf.emitente||'Fornecedor')+' · NF '+(nf.numero||''),amount:-Math.abs(nf.total),category:'',note:'',manual:false});
       okN++;
     }catch(e){ errN++; }
   }
   await carregar();
-  toast(okN+' nota(s) importada(s)'+(dupN?(' · '+dupN+' já existiam'):'')+(errN?(' · '+errN+' com erro'):''));
+  if(okN) showView('notas');
+  toast(okN+' nota(s) importada(s)'+(dupN?(' · '+dupN+' já existiam'):'')+(errN?(' · '+errN+' com erro'):'')+(okN?' — vincule na aba Notas fiscais':''));
 }
 function verNota(chave){
   rpc('fin_nota_get',{p_chave:chave}).then(function(n){
@@ -581,7 +582,57 @@ function buildRelatorio(comp){
   h+='<div class="rep-tot"><div>Receitas '+R(totR)+' &nbsp;·&nbsp; Despesas '+R(totD)+'</div><div class="rep-res">Resultado: '+R(res)+'</div></div></div>';
   return h;
 }
+function renderNotas(){
+  var m=document.getElementById('main');
+  var h='<h1 class="page">Notas Fiscais · '+UNIT_LABEL[UNIT]+'</h1><div class="page-sub">Importe NF-e (XML) na aba Lançamentos. Aqui você vincula cada nota ao pagamento no extrato — sem duplicar a despesa.</div>';
+  if(!NOTAS.length){ h+='<div class="empty">Nenhuma nota importada ainda.<br>Use "📄 Importar NF-e" na aba Lançamentos.</div>'; m.innerHTML=h; return; }
+  var pend=NOTAS.filter(function(n){return !n.lancamento_id;});
+  var vinc=NOTAS.filter(function(n){return n.lancamento_id;});
+  h+='<div class="bar"><span class="pill">'+pend.length+' a vincular</span><span class="pill" style="background:#eef9f1;color:#1d6b43">'+vinc.length+' vinculadas</span></div>';
+  function notaCard(n){
+    var lanc = n.lancamento_id ? LANC.find(function(l){return l.id===n.lancamento_id;}) : null;
+    return '<div style="background:#fff;border:1.5px solid var(--border);border-radius:12px;padding:12px 16px;margin-bottom:9px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">'
+      +'<div style="min-width:160px"><div style="font-weight:600">'+esc(n.emitente||'')+' · NF '+esc(n.numero||'')+'</div><div style="font-size:.74rem;color:var(--muted)">Emissão '+fmtData(n.data_emissao)+' · Total '+R(n.valor_total)+(lanc?(' · banco: '+R(lanc.amount)):'')+'</div></div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      +'<button class="btn btn-g btn-sm" onclick="verNota(\''+n.chave+'\')">📄 Itens</button>'
+      +(n.lancamento_id
+          ? '<button class="btn btn-g btn-sm" onclick="desvincularNota(\''+n.chave+'\')">Desvincular</button>'
+          : '<button class="btn btn-p btn-sm" onclick="modalVincular(\''+n.chave+'\')">🔗 Vincular ao pagamento</button>')
+      +'<button class="btn btn-d btn-sm" onclick="delNota(\''+n.chave+'\')">🗑</button>'
+      +'</div></div>';
+  }
+  if(pend.length){ h+='<div class="grouphead">A vincular ('+pend.length+')</div>'+pend.map(notaCard).join(''); }
+  if(vinc.length){ h+='<div class="grouphead" style="background:#eef9f1;color:#1d6b43">Vinculadas ('+vinc.length+')</div>'+vinc.map(notaCard).join(''); }
+  m.innerHTML=h;
+}
+function modalVincular(chave){
+  var n=NOTAS.find(function(x){return x.chave===chave;}); if(!n)return;
+  var tot=Math.abs(parseFloat(n.valor_total)||0);
+  var cands=LANC.filter(function(l){return !l.nota_chave;}).slice();
+  cands.sort(function(a,b){ return Math.abs(Math.abs(+a.amount)-tot)-Math.abs(Math.abs(+b.amount)-tot); });
+  cands=cands.slice(0,40);
+  var opts=cands.map(function(l){ var igual=Math.abs(Math.abs(+l.amount)-tot)<0.01?' ✓ valor igual':''; return '<option value="'+l.id+'">'+fmtData(l.date)+' · '+R(l.amount)+' · '+esc((l.memo||'').slice(0,42))+igual+'</option>'; }).join('');
+  if(!opts){ opts='<option value="">(nenhum pagamento disponível — importe o OFX)</option>'; }
+  openModal('<h2>Vincular nota ao pagamento</h2><div class="page-sub" style="margin-bottom:12px">'+esc(n.emitente||'')+' · NF '+esc(n.numero||'')+' · Total '+R(n.valor_total)+'</div>'
+    +'<div class="fg"><label>Pagamento no extrato (mais próximos do valor primeiro)</label><select class="in" id="vkLanc">'+opts+'</select></div>'
+    +'<div class="fg"><label>Categoria (aplica ao lançamento ao vincular)</label><select class="in" id="vkCat">'+catOptions('')+'</select></div>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="confirmarVinculo(\''+chave+'\')">Vincular</button></div>');
+}
+async function confirmarVinculo(chave){
+  var lancId=document.getElementById('vkLanc').value; var cat=document.getElementById('vkCat').value;
+  if(!lancId){alert('Selecione o pagamento no extrato.');return;}
+  try{ await rpc('fin_nota_vincular',{p_chave:chave,p_lancamento_id:lancId,p_category:cat}); closeModal(); await carregar(); showView('notas'); toast('Nota vinculada ao pagamento'); }
+  catch(e){ alert('Erro ao vincular: '+e.message); }
+}
+async function desvincularNota(chave){
+  try{ await rpc('fin_nota_desvincular',{p_chave:chave}); await carregar(); showView('notas'); toast('Desvinculada'); }catch(e){ toast('Erro'); }
+}
+async function delNota(chave){
+  if(!confirm('Excluir esta nota? (não remove o lançamento do banco, só a nota importada)'))return;
+  try{ await rpc('fin_nota_delete',{p_chave:chave}); await carregar(); showView('notas'); toast('Nota excluída'); }catch(e){ toast('Erro'); }
+}
 function exportPDF(comp){
+
   var pa=document.getElementById('printArea');
   if(!pa){ pa=document.createElement('div'); pa.id='printArea'; document.body.appendChild(pa); }
   pa.innerHTML=buildRelatorio(comp);
