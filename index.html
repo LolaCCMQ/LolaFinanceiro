@@ -290,7 +290,7 @@ function renderLanc(){
   h+='<div class="bar" id="selBar" style="'+(SEL.size?'display:flex':'display:none')+';background:var(--vinho-pale);padding:8px 12px;border-radius:8px;align-items:center;gap:10px"><strong><span id="selCount">'+SEL.size+'</span> selecionado(s)</strong><button class="btn btn-g btn-sm" onclick="catSelecionados()">🏷️ Categorizar</button><button class="btn btn-d btn-sm" onclick="delSelecionados()">🗑 Excluir</button><button class="btn btn-g btn-sm" onclick="limparSel()">Limpar</button></div>';
   h+='<table><thead><tr><th style="width:34px;text-align:center"><input type="checkbox" onclick="toggleSelAll(this.checked)"'+(LANC.length&&SEL.size===LANC.length?' checked':'')+'></th><th>Data</th><th>Comp.</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Categoria</th><th>Obs</th><th></th></tr></thead><tbody>';
   LANC.forEach(l=>{
-    h+='<tr>'+
+    h+='<tr'+(l.category?' style="background:#eef9f1"':'')+'>'+
       '<td style="text-align:center"><input type="checkbox" onclick="toggleSel(\''+l.id+'\',this.checked)"'+(SEL.has(l.id)?' checked':'')+'></td>'+
       '<td>'+fmtData(l.date)+(l.manual?' <span class="pill">manual</span>':'')+'</td>'+
       '<td><input class="in" style="width:140px;padding:6px 8px;font-weight:600" type="month" value="'+esc(l.competencia)+'" onchange="setComp(\''+l.id+'\',this.value)"></td>'+
@@ -394,7 +394,7 @@ function renderFech(){
   const meses=mesesDisponiveis();
   if(!meses.includes(fechMes)) fechMes=meses[0];
   let h='<h1 class="page">Fechamento do mês · '+UNIT_LABEL[UNIT]+'</h1><div class="page-sub">Totais por grupo, por competência.</div>';
-  h+='<div class="bar no-print"><label style="font-size:.8rem;font-weight:700;color:var(--muted)">Competência:</label><select class="in" onchange="fechMes=this.value;render()">'+meses.map(mm=>'<option value="'+mm+'"'+(mm===fechMes?' selected':'')+'>'+mesLabel(mm)+'</option>').join('')+'</select> <button class="btn btn-g" onclick="exportPDF()">🖨️ PDF</button></div>';
+  h+='<div class="bar no-print"><label style="font-size:.8rem;font-weight:700;color:var(--muted)">Competência:</label><select class="in" onchange="fechMes=this.value;render()">'+meses.map(mm=>'<option value="'+mm+'"'+(mm===fechMes?' selected':'')+'>'+mesLabel(mm)+'</option>').join('')+'</select> <button class="btn btn-g" onclick="exportPDF(fechMes)">🖨️ PDF</button></div>';
   const doMes=LANC.filter(l=>l.competencia===fechMes);
   const groups=planoGroups();
   let totReceita=0, totDespesa=0;
@@ -558,10 +558,10 @@ function verNota(chave){
   }).catch(function(){ toast('Erro ao carregar nota'); });
 }
 function buildRelatorio(comp){
-  var doMes=LANC.filter(function(l){return l.competencia===comp;});
+  var doMes= comp ? LANC.filter(function(l){return l.competencia===comp;}) : LANC.slice();
   var groups=planoGroups();
   var totR=0,totD=0;
-  var h='<div class="rep"><div class="rep-head"><div class="rep-title">Relatório Financeiro · '+UNIT_LABEL[UNIT]+'</div><div class="rep-sub">Competência '+mesLabel(comp)+' · '+doMes.length+' lançamento(s)</div></div>';
+  var h='<div class="rep"><div class="rep-head"><div class="rep-title">Relatório Financeiro · '+UNIT_LABEL[UNIT]+'</div><div class="rep-sub">'+(comp?('Competência '+mesLabel(comp)):'Todas as competências')+' · '+doMes.length+' lançamento(s)</div></div>';
   if(!doMes.length){ h+='<div style="color:#8a7077;padding:20px 0">Nenhum lançamento nesta competência.</div></div>'; return h; }
   groups.forEach(function(g){
     var cats=g.cats.map(function(c){ var ls=doMes.filter(function(l){return l.category===c.id;}); var tot=ls.reduce(function(s,l){return s+ +l.amount;},0); return {label:c.label,tot:tot,ls:ls}; }).filter(function(c){return Math.abs(c.tot)>0.001;});
@@ -580,10 +580,10 @@ function buildRelatorio(comp){
   h+='<div class="rep-tot"><div>Receitas '+R(totR)+' &nbsp;·&nbsp; Despesas '+R(totD)+'</div><div class="rep-res">Resultado: '+R(res)+'</div></div></div>';
   return h;
 }
-function exportPDF(){
+function exportPDF(comp){
   var pa=document.getElementById('printArea');
   if(!pa){ pa=document.createElement('div'); pa.id='printArea'; document.body.appendChild(pa); }
-  pa.innerHTML=buildRelatorio(fechMes);
+  pa.innerHTML=buildRelatorio(comp);
   window.print();
 }
 function exportXLSX(){
