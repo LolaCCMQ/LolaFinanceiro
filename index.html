@@ -249,7 +249,7 @@ async function carregar(){
   catch(e){ LANC=[]; toast('Erro ao carregar lançamentos'); }
   render();
 }
-function setUnit(u){ UNIT=u; document.getElementById('u-mac').classList.toggle('active',u==='mac'); document.getElementById('u-ccmq').classList.toggle('active',u==='ccmq'); carregar(); }
+function setUnit(u){ UNIT=u; SEL.clear(); document.getElementById('u-mac').classList.toggle('active',u==='mac'); document.getElementById('u-ccmq').classList.toggle('active',u==='ccmq'); carregar(); }
 function showView(v){ VIEW=v; ['lanc','fech','plano'].forEach(x=>document.getElementById('nav-'+x).classList.toggle('active',x===v)); render(); }
 function render(){ if(VIEW==='lanc')renderLanc(); else if(VIEW==='fech')renderFech(); else renderPlano(); }
 
@@ -274,9 +274,11 @@ function renderLanc(){
   const totOut=LANC.filter(l=>l.amount<0).reduce((s,l)=>s+ +l.amount,0);
   const semCat=LANC.filter(l=>!l.category).length;
   h+='<div class="bar"><span class="pill">Entradas: '+R(totIn)+'</span><span class="pill">Saídas: '+R(totOut)+'</span><span class="pill">Saldo: '+R(totIn+totOut)+'</span>'+(semCat?'<span class="pill" style="background:#fde8c0;color:#7a4f00">'+semCat+' sem categoria</span>':'')+'</div>';
-  h+='<table><thead><tr><th>Data</th><th>Comp.</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Categoria</th><th>Obs</th><th></th></tr></thead><tbody>';
+  h+='<div class="bar" id="selBar" style="'+(SEL.size?'display:flex':'display:none')+';background:var(--vinho-pale);padding:8px 12px;border-radius:8px;align-items:center;gap:10px"><strong><span id="selCount">'+SEL.size+'</span> selecionado(s)</strong><button class="btn btn-g btn-sm" onclick="catSelecionados()">🏷️ Categorizar</button><button class="btn btn-d btn-sm" onclick="delSelecionados()">🗑 Excluir</button><button class="btn btn-g btn-sm" onclick="limparSel()">Limpar</button></div>';
+  h+='<table><thead><tr><th style="width:34px;text-align:center"><input type="checkbox" onclick="toggleSelAll(this.checked)"'+(LANC.length&&SEL.size===LANC.length?' checked':'')+'></th><th>Data</th><th>Comp.</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Categoria</th><th>Obs</th><th></th></tr></thead><tbody>';
   LANC.forEach(l=>{
     h+='<tr>'+
+      '<td style="text-align:center"><input type="checkbox" onclick="toggleSel(\''+l.id+'\',this.checked)"'+(SEL.has(l.id)?' checked':'')+'></td>'+
       '<td>'+fmtData(l.date)+(l.manual?' <span class="pill">manual</span>':'')+'</td>'+
       '<td><input class="in" style="width:140px;padding:6px 8px;font-weight:600" type="month" value="'+esc(l.competencia)+'" onchange="setComp(\''+l.id+'\',this.value)"></td>'+
       '<td>'+esc(l.memo)+'</td>'+
@@ -438,6 +440,27 @@ async function delCat(id){
   try{ await rpc('fin_plano_delete',{p_id:id}); PLANO=PLANO.filter(x=>x.id!==id); render(); toast('Excluída'); }catch(e){ toast('Erro'); }
 }
 
+let SEL=new Set();
+function toggleSel(id,ck){ if(ck)SEL.add(id); else SEL.delete(id); var b=document.getElementById('selBar'); if(b)b.style.display=SEL.size?'flex':'none'; var c=document.getElementById('selCount'); if(c)c.textContent=SEL.size; }
+function toggleSelAll(ck){ SEL.clear(); if(ck)LANC.forEach(function(l){SEL.add(l.id);}); render(); }
+function limparSel(){ SEL.clear(); render(); }
+async function delSelecionados(){
+  if(!SEL.size)return;
+  if(!confirm('Excluir '+SEL.size+' lançamento(s) selecionado(s)? Esta ação não pode ser desfeita.'))return;
+  var ids=Array.from(SEL); toast('Excluindo '+ids.length+'...');
+  for(var i=0;i<ids.length;i++){ try{ await rpc('fin_lancamento_delete',{p_id:ids[i]}); LANC=LANC.filter(function(x){return x.id!==ids[i];}); }catch(e){} }
+  SEL.clear(); render(); toast('Excluídos: '+ids.length);
+}
+function catSelecionados(){
+  if(!SEL.size)return;
+  openModal('<h2>Categorizar '+SEL.size+' selecionado(s)</h2><div class="fg"><label>Categoria</label><select class="in" id="selCat">'+catOptions('')+'</select></div><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="aplicarCatSel()">Aplicar</button></div>');
+}
+async function aplicarCatSel(){
+  var cat=document.getElementById('selCat').value;
+  var ids=Array.from(SEL); closeModal(); toast('Aplicando...');
+  for(var i=0;i<ids.length;i++){ var l=LANC.find(function(x){return x.id===ids[i];}); if(l)l.category=cat; try{ await saveLanc({id:ids[i],category:cat}); }catch(e){} }
+  SEL.clear(); render(); toast('Categorizados: '+ids.length);
+}
 let _catPickLanc=null;
 function openCatPicker(ev,lancId){
   ev.stopPropagation(); _catPickLanc=lancId;
