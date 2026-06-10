@@ -96,6 +96,7 @@
   .catbtn{background:#fff;border:1.5px solid var(--border);border-radius:8px;padding:5px 9px;font-family:inherit;font-size:.8rem;cursor:pointer;max-width:190px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
   .catbtn:hover{border-color:var(--vinho)}
   .catbtn-empty{color:var(--muted)}
+  .catbtn-set{background:#eef9f1;border-color:#9fd3b4;color:#1d6b43;font-weight:600}
   .catpick{position:absolute;z-index:300;background:#fff;border:1.5px solid var(--vinho);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);padding:8px;width:264px;max-height:320px;overflow-y:auto;display:none}
   .catgrp{font-size:.62rem;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:7px 6px 2px}
   .catopt{padding:6px 9px;border-radius:7px;cursor:pointer;font-size:.84rem}
@@ -290,13 +291,13 @@ function renderLanc(){
   h+='<div class="bar" id="selBar" style="'+(SEL.size?'display:flex':'display:none')+';background:var(--vinho-pale);padding:8px 12px;border-radius:8px;align-items:center;gap:10px"><strong><span id="selCount">'+SEL.size+'</span> selecionado(s)</strong><button class="btn btn-g btn-sm" onclick="catSelecionados()">🏷️ Categorizar</button><button class="btn btn-d btn-sm" onclick="delSelecionados()">🗑 Excluir</button><button class="btn btn-g btn-sm" onclick="limparSel()">Limpar</button></div>';
   h+='<table><thead><tr><th style="width:34px;text-align:center"><input type="checkbox" onclick="toggleSelAll(this.checked)"'+(LANC.length&&SEL.size===LANC.length?' checked':'')+'></th><th>Data</th><th>Comp.</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Categoria</th><th>Obs</th><th></th></tr></thead><tbody>';
   LANC.forEach(l=>{
-    h+='<tr'+(l.category?' style="background:#eef9f1"':'')+'>'+
+    h+='<tr>'+
       '<td style="text-align:center"><input type="checkbox" onclick="toggleSel(\''+l.id+'\',this.checked)"'+(SEL.has(l.id)?' checked':'')+'></td>'+
       '<td>'+fmtData(l.date)+(l.manual?' <span class="pill">manual</span>':'')+'</td>'+
       '<td><input class="in" style="width:140px;padding:6px 8px;font-weight:600" type="month" value="'+esc(l.competencia)+'" onchange="setComp(\''+l.id+'\',this.value)"></td>'+
       '<td>'+esc(l.memo)+'</td>'+
       '<td style="text-align:right" class="'+(l.amount<0?'val-neg':'val-pos')+'">'+R(l.amount)+'</td>'+
-      '<td><button class="catbtn'+(l.category?'':' catbtn-empty')+'" onclick="openCatPicker(event,\''+l.id+'\')">'+(l.category?esc(catLabel(l.category)):'— categorizar —')+'</button></td>'+
+      '<td><button class="catbtn'+(l.category?' catbtn-set':' catbtn-empty')+'" onclick="openCatPicker(event,\''+l.id+'\')">'+(l.category?esc(catLabel(l.category)):'— categorizar —')+'</button></td>'+
       '<td><input class="in" style="width:120px;padding:4px 6px" value="'+esc(l.note||'')+'" placeholder="..." onchange="setNote(\''+l.id+'\',this.value)"></td>'+
       '<td style="white-space:nowrap">'+((l.fitid&&l.fitid.indexOf('NFE:')===0)?'<button class="btn btn-g btn-sm" onclick="verNota(\''+l.fitid.slice(4)+'\')" title="Ver nota">📄</button> ':'')+'<button class="btn btn-g btn-sm" onclick="modalManual(\''+l.id+'\')">✏️</button> <button class="btn btn-d btn-sm" onclick="delLanc(\''+l.id+'\')">🗑</button></td>'+
       '</tr>';
