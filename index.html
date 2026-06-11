@@ -164,6 +164,7 @@ let VIEW='lanc';
 let LANC=[];
 let NOTAS=[];
 let IMPORTS=[];
+let FLANC={q:'',cat:'',mes:''};
 let PLANO=[];
 let fechMes = new Date().toISOString().slice(0,7);
 
@@ -272,7 +273,7 @@ async function carregar(){
   try{ IMPORTS=await rpc('fin_import_list',{p_unit:UNIT}) || []; }catch(e){ IMPORTS=[]; }
   render();
 }
-function setUnit(u){ UNIT=u; SEL.clear(); document.getElementById('u-mac').classList.toggle('active',u==='mac'); document.getElementById('u-ccmq').classList.toggle('active',u==='ccmq'); carregar(); }
+function setUnit(u){ UNIT=u; SEL.clear(); FLANC={q:'',cat:'',mes:''}; document.getElementById('u-mac').classList.toggle('active',u==='mac'); document.getElementById('u-ccmq').classList.toggle('active',u==='ccmq'); carregar(); }
 function showView(v){ VIEW=v; ['lanc','notas','import','fech','plano'].forEach(x=>document.getElementById('nav-'+x).classList.toggle('active',x===v)); render(); }
 function render(){ if(VIEW==='lanc')renderLanc(); else if(VIEW==='notas')renderNotas(); else if(VIEW==='import')renderImportacoes(); else if(VIEW==='fech')renderFech(); else renderPlano(); }
 
@@ -295,26 +296,61 @@ function renderLanc(){
      '<button class="btn btn-g" onclick="exportXLSX()">📊 Excel</button>'+
      '</div>';
   if(!LANC.length){ h+='<div class="empty">Nenhum lançamento ainda.<br>Importe um extrato OFX ou adicione manualmente.</div>'; m.innerHTML=h; return; }
-  const totIn=LANC.filter(l=>l.amount>0).reduce((s,l)=>s+ +l.amount,0);
-  const totOut=LANC.filter(l=>l.amount<0).reduce((s,l)=>s+ +l.amount,0);
-  const semCat=LANC.filter(l=>!l.category).length;
-  h+='<div class="bar"><span class="pill">Entradas: '+R(totIn)+'</span><span class="pill">Saídas: '+R(totOut)+'</span><span class="pill">Saldo: '+R(totIn+totOut)+'</span>'+(semCat?'<span class="pill" style="background:#fde8c0;color:#7a4f00">'+semCat+' sem categoria</span>':'')+'</div>';
+  h+='<div class="bar no-print" style="gap:8px;flex-wrap:wrap;align-items:center">'
+    +'<input class="in" id="fLancQ" placeholder="\uD83D\uDD0D Buscar na descrição..." value="'+esc(FLANC.q)+'" oninput="aplicarFiltroLanc()" autocomplete="off" style="min-width:200px;flex:1">'
+    +'<select class="in" id="fLancCat" onchange="aplicarFiltroLanc()" style="max-width:240px">'+catFilterOptions(FLANC.cat)+'</select>'
+    +'<select class="in" id="fLancMes" onchange="aplicarFiltroLanc()" style="max-width:150px"><option value="">Todos os meses</option>'+mesesDisponiveis().map(function(mm){return '<option value="'+mm+'"'+(mm===FLANC.mes?' selected':'')+'>'+mesLabel(mm)+'</option>';}).join('')+'</select>'
+    +'<button class="btn btn-g btn-sm" onclick="limparFiltroLanc()">Limpar filtro</button>'
+    +'</div>';
+  var _ini=filtrarLista();
+  h+='<div class="bar" id="lancTotais">'+lancTotaisInner(_ini)+'</div>';
   h+='<div class="bar" id="selBar" style="'+(SEL.size?'display:flex':'display:none')+';background:var(--vinho-pale);padding:8px 12px;border-radius:8px;align-items:center;gap:10px"><strong><span id="selCount">'+SEL.size+'</span> selecionado(s)</strong><button class="btn btn-g btn-sm" onclick="catSelecionados()">🏷️ Categorizar</button><button class="btn btn-d btn-sm" onclick="delSelecionados()">🗑 Excluir</button><button class="btn btn-g btn-sm" onclick="limparSel()">Limpar</button></div>';
-  h+='<table><thead><tr><th style="width:34px;text-align:center"><input type="checkbox" onclick="toggleSelAll(this.checked)"'+(LANC.length&&SEL.size===LANC.length?' checked':'')+'></th><th>Data</th><th>Comp.</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Categoria</th><th>Obs</th><th></th></tr></thead><tbody>';
-  LANC.forEach(l=>{
-    h+='<tr>'+
-      '<td style="text-align:center"><input type="checkbox" onclick="toggleSel(\''+l.id+'\',this.checked)"'+(SEL.has(l.id)?' checked':'')+'></td>'+
-      '<td>'+fmtData(l.date)+(l.manual?' <span class="pill">manual</span>':'')+'</td>'+
-      '<td><input class="in" style="width:140px;padding:6px 8px;font-weight:600" type="month" value="'+esc(l.competencia)+'" onchange="setComp(\''+l.id+'\',this.value)"></td>'+
-      '<td>'+esc(l.memo)+'</td>'+
-      '<td style="text-align:right" class="'+(l.amount<0?'val-neg':'val-pos')+'">'+R(l.amount)+'</td>'+
-      '<td><button class="catbtn'+(l.category?' catbtn-set':' catbtn-empty')+'" onclick="openCatPicker(event,\''+l.id+'\')">'+(l.category?esc(catLabel(l.category)):'— categorizar —')+'</button></td>'+
-      '<td><input class="in" style="width:120px;padding:4px 6px" value="'+esc(l.note||'')+'" placeholder="..." onchange="setNote(\''+l.id+'\',this.value)"></td>'+
-      '<td style="white-space:nowrap">'+(l.nota_chave?'<button class="btn btn-g btn-sm" onclick="verNota(\''+l.nota_chave+'\')" title="Ver nota vinculada">📄</button> ':'')+'<button class="btn btn-g btn-sm" onclick="modalManual(\''+l.id+'\')">✏️</button> <button class="btn btn-d btn-sm" onclick="delLanc(\''+l.id+'\')">🗑</button></td>'+
-      '</tr>';
-  });
-  h+='</tbody></table>';
+  h+='<table><thead><tr><th style="width:34px;text-align:center"><input type="checkbox" onclick="toggleSelAll(this.checked)"'+(LANC.length&&SEL.size===LANC.length?' checked':'')+'></th><th>Data</th><th>Comp.</th><th>Descrição</th><th style="text-align:right">Valor</th><th>Categoria</th><th>Obs</th><th></th></tr></thead><tbody id="lancBody">'+lancBodyHTML(_ini)+'</tbody></table>';
   m.innerHTML=h;
+}
+function _lancRow(l){
+  return '<tr>'+
+    '<td style="text-align:center"><input type="checkbox" onclick="toggleSel(\''+l.id+'\',this.checked)"'+(SEL.has(l.id)?' checked':'')+'></td>'+
+    '<td>'+fmtData(l.date)+(l.manual?' <span class="pill">manual</span>':'')+'</td>'+
+    '<td><input class="in" style="width:140px;padding:6px 8px;font-weight:600" type="month" value="'+esc(l.competencia)+'" onchange="setComp(\''+l.id+'\',this.value)"></td>'+
+    '<td>'+esc(l.memo)+'</td>'+
+    '<td style="text-align:right" class="'+(l.amount<0?'val-neg':'val-pos')+'">'+R(l.amount)+'</td>'+
+    '<td><button class="catbtn'+(l.category?' catbtn-set':' catbtn-empty')+'" onclick="openCatPicker(event,\''+l.id+'\')">'+(l.category?esc(catLabel(l.category)):'— categorizar —')+'</button></td>'+
+    '<td><input class="in" style="width:120px;padding:4px 6px" value="'+esc(l.note||'')+'" placeholder="..." onchange="setNote(\''+l.id+'\',this.value)"></td>'+
+    '<td style="white-space:nowrap">'+(l.nota_chave?'<button class="btn btn-g btn-sm" onclick="verNota(\''+l.nota_chave+'\')" title="Ver nota vinculada">📄</button> ':'')+'<button class="btn btn-g btn-sm" onclick="modalManual(\''+l.id+'\')">✏️</button> <button class="btn btn-d btn-sm" onclick="delLanc(\''+l.id+'\')">🗑</button></td>'+
+    '</tr>';
+}
+function lancBodyHTML(list){ if(!list.length) return '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:18px">Nenhum lançamento com esse filtro.</td></tr>'; return list.map(_lancRow).join(''); }
+function lancTotaisInner(list){
+  var totIn=list.filter(function(l){return l.amount>0;}).reduce(function(s,l){return s+ +l.amount;},0);
+  var totOut=list.filter(function(l){return l.amount<0;}).reduce(function(s,l){return s+ +l.amount;},0);
+  var semCat=list.filter(function(l){return !l.category;}).length;
+  var ativo=(FLANC.q||FLANC.cat||FLANC.mes);
+  return (ativo?'<span class="pill" style="background:#e7eefc;color:#23508a">'+list.length+' filtrado(s)</span>':'')+'<span class="pill">Entradas: '+R(totIn)+'</span><span class="pill">Saídas: '+R(totOut)+'</span><span class="pill">Saldo: '+R(totIn+totOut)+'</span>'+(semCat?'<span class="pill" style="background:#fde8c0;color:#7a4f00">'+semCat+' sem categoria</span>':'');
+}
+function filtrarLista(){
+  var q=_vkNorm(FLANC.q);
+  return LANC.filter(function(l){
+    if(q && _vkNorm(l.memo).indexOf(q)<0) return false;
+    if(FLANC.cat==='__none'){ if(l.category) return false; }
+    else if(FLANC.cat){ if(l.category!==FLANC.cat) return false; }
+    if(FLANC.mes && l.competencia!==FLANC.mes) return false;
+    return true;
+  });
+}
+function aplicarFiltroLanc(){
+  var eq=document.getElementById('fLancQ'); if(eq)FLANC.q=eq.value;
+  var ec=document.getElementById('fLancCat'); if(ec)FLANC.cat=ec.value;
+  var em=document.getElementById('fLancMes'); if(em)FLANC.mes=em.value;
+  var list=filtrarLista();
+  var tb=document.getElementById('lancBody'); if(tb)tb.innerHTML=lancBodyHTML(list);
+  var tt=document.getElementById('lancTotais'); if(tt)tt.innerHTML=lancTotaisInner(list);
+}
+function limparFiltroLanc(){ FLANC={q:'',cat:'',mes:''}; renderLanc(); }
+function catFilterOptions(sel){
+  var h='<option value="">Todas as categorias</option><option value="__none"'+(sel==='__none'?' selected':'')+'>— sem categoria —</option>';
+  planoGroups().forEach(function(g){ h+='<optgroup label="'+esc(g.label)+'">'+g.cats.map(function(c){return '<option value="'+c.id+'"'+(c.id===sel?' selected':'')+'>'+esc(c.label)+'</option>';}).join('')+'</optgroup>'; });
+  return h;
 }
 async function saveLanc(patch){
   try{ const r=await rpc('fin_lancamento_save',{p:patch}); const i=LANC.findIndex(x=>x.id===r.id); if(i>=0)LANC[i]=r; else LANC.push(r); return r; }
