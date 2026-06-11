@@ -328,7 +328,7 @@ function lancTotaisInner(list){
   var totOut=list.filter(function(l){return l.amount<0;}).reduce(function(s,l){return s+ +l.amount;},0);
   var semCat=list.filter(function(l){return !l.category;}).length;
   var ativo=(FLANC.q||FLANC.cat||FLANC.mes);
-  return (ativo?'<span class="pill" style="background:#e7eefc;color:#23508a">'+list.length+' filtrado(s)</span>':'')+'<span class="pill">Entradas: '+R(totIn)+'</span><span class="pill">Saídas: '+R(totOut)+'</span><span class="pill">Saldo: '+R(totIn+totOut)+'</span>'+(semCat?'<span class="pill" style="background:#fde8c0;color:#7a4f00">'+semCat+' sem categoria</span>':'');
+  return (ativo?'<span class="pill" style="background:#e7eefc;color:#23508a">'+list.length+' filtrado(s)</span>':'')+'<span class="pill">Entradas: '+R(totIn)+'</span><span class="pill">Saídas: '+R(totOut)+'</span><span class="pill">Saldo: '+R(totIn+totOut)+'</span>'+(semCat?'<span class="pill" style="background:#fde8c0;color:#7a4f00">'+semCat+' sem categoria</span>':'')+((ativo&&list.length)?' <button class="btn btn-d btn-sm" onclick="excluirFiltrados()" style="margin-left:4px">🗑 Excluir os '+list.length+'</button>':'');
 }
 function filtrarLista(){
   var q=_vkNorm(FLANC.q);
@@ -539,12 +539,21 @@ async function delCat(id){
 
 let SEL=new Set();
 function toggleSel(id,ck){ if(ck)SEL.add(id); else SEL.delete(id); var b=document.getElementById('selBar'); if(b)b.style.display=SEL.size?'flex':'none'; var c=document.getElementById('selCount'); if(c)c.textContent=SEL.size; }
-function toggleSelAll(ck){ SEL.clear(); if(ck)LANC.forEach(function(l){SEL.add(l.id);}); render(); }
+function toggleSelAll(ck){ SEL.clear(); if(ck)(typeof filtrarLista==='function'?filtrarLista():LANC).forEach(function(l){SEL.add(l.id);}); render(); }
 function limparSel(){ SEL.clear(); render(); }
 async function delSelecionados(){
   if(!SEL.size)return;
   if(!confirm('Excluir '+SEL.size+' lançamento(s) selecionado(s)? Esta ação não pode ser desfeita.'))return;
   var ids=Array.from(SEL); toast('Excluindo '+ids.length+'...');
+  for(var i=0;i<ids.length;i++){ try{ await rpc('fin_lancamento_delete',{p_id:ids[i]}); LANC=LANC.filter(function(x){return x.id!==ids[i];}); }catch(e){} }
+  SEL.clear(); render(); toast('Excluídos: '+ids.length);
+}
+async function excluirFiltrados(){
+  var list=(typeof filtrarLista==='function')?filtrarLista():[];
+  if(!list.length)return;
+  if(!confirm('Excluir os '+list.length+' lançamentos filtrados? Esta ação não pode ser desfeita.'))return;
+  var ids=list.map(function(l){return l.id;});
+  toast('Excluindo '+ids.length+'...');
   for(var i=0;i<ids.length;i++){ try{ await rpc('fin_lancamento_delete',{p_id:ids[i]}); LANC=LANC.filter(function(x){return x.id!==ids[i];}); }catch(e){} }
   SEL.clear(); render(); toast('Excluídos: '+ids.length);
 }
