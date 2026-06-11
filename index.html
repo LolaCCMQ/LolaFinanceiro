@@ -140,6 +140,7 @@
     <button class="tnav active" id="nav-lanc" onclick="showView('lanc')">📒 Lançamentos</button>
     <button class="tnav" id="nav-notas" onclick="showView('notas')">📄 Notas fiscais</button>
     <button class="tnav" id="nav-fech" onclick="showView('fech')">📊 Fechamento do mês</button>
+    <button class="tnav" id="nav-import" onclick="showView('import')">📥 Importações</button>
     <button class="tnav" id="nav-plano" onclick="showView('plano')">🗂️ Plano de contas</button>
   </div>
   <div class="main" id="main"></div>
@@ -162,6 +163,7 @@ window.addEventListener('message',function(e){ try{ var d=e.data; if(d&&d.type==
 let VIEW='lanc';
 let LANC=[];
 let NOTAS=[];
+let IMPORTS=[];
 let PLANO=[];
 let fechMes = new Date().toISOString().slice(0,7);
 
@@ -267,11 +269,12 @@ async function carregar(){
   try{ LANC=await rpc('fin_lancamentos_list',{p_unit:UNIT}) || []; }
   catch(e){ LANC=[]; toast('Erro ao carregar lançamentos'); }
   try{ NOTAS=await rpc('fin_notas_list',{p_unit:UNIT}) || []; }catch(e){ NOTAS=[]; }
+  try{ IMPORTS=await rpc('fin_import_list',{p_unit:UNIT}) || []; }catch(e){ IMPORTS=[]; }
   render();
 }
 function setUnit(u){ UNIT=u; SEL.clear(); document.getElementById('u-mac').classList.toggle('active',u==='mac'); document.getElementById('u-ccmq').classList.toggle('active',u==='ccmq'); carregar(); }
-function showView(v){ VIEW=v; ['lanc','notas','fech','plano'].forEach(x=>document.getElementById('nav-'+x).classList.toggle('active',x===v)); render(); }
-function render(){ if(VIEW==='lanc')renderLanc(); else if(VIEW==='notas')renderNotas(); else if(VIEW==='fech')renderFech(); else renderPlano(); }
+function showView(v){ VIEW=v; ['lanc','notas','import','fech','plano'].forEach(x=>document.getElementById('nav-'+x).classList.toggle('active',x===v)); render(); }
+function render(){ if(VIEW==='lanc')renderLanc(); else if(VIEW==='notas')renderNotas(); else if(VIEW==='import')renderImportacoes(); else if(VIEW==='fech')renderFech(); else renderPlano(); }
 
 function catOptions(sel){
   let h='<option value="">— categorizar —</option>';
@@ -281,6 +284,7 @@ function catOptions(sel){
 function renderLanc(){
   const m=document.getElementById('main');
   let h='<h1 class="page">Lançamentos · '+UNIT_LABEL[UNIT]+'</h1><div class="page-sub">Importe o extrato (OFX), categorize, ajuste competência e adicione lançamentos manuais.</div>';
+  h+=coberturaOFXHint();
   h+='<div class="bar no-print">'+
      '<button class="btn btn-p" onclick="document.getElementById(\'ofxInput\').click()">⬆️ Importar OFX</button>'+
      '<button class="btn btn-o" onclick="document.getElementById(\'nfeInput\').click()">📄 Importar NF-e</button>'+
@@ -391,11 +395,45 @@ async function processarOFX(text){
   toast('Importando '+rows.length+'...');
   try{
     const n=await rpc('fin_lancamentos_import',{p_unit:UNIT,p_rows:rows});
+    const _ds=rows.map(r=>r.date).filter(Boolean).sort();
+    try{ await rpc('fin_import_save',{p:{unit:UNIT,tipo:'OFX',data_inicio:_ds[0]||'',data_fim:_ds[_ds.length-1]||'',qtd:n,criado_por:ADMIN.name}}); }catch(e){}
     await carregar();
     toast(n+' lançamento(s) importado(s)'+(n<rows.length?(' ('+(rows.length-n)+' já existiam)'):''));
   }catch(e){ toast('Erro ao importar'); alert('Erro ao importar: '+e.message); }
 }
 
+function addDias(dateStr,n){ if(!dateStr)return''; var d=new Date(String(dateStr).slice(0,10)+'T00:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+function coberturaOFXHint(){
+  var ofx=(IMPORTS||[]).filter(function(i){return i.tipo==='OFX' && i.data_fim;});
+  if(!ofx.length) return '';
+  var ultimo=ofx.reduce(function(a,b){ return (a.data_fim>=b.data_fim)?a:b; });
+  var prox=addDias(ultimo.data_fim,1);
+  return '<div style="background:#eef9f1;border:1.5px solid #9fd3b4;border-radius:10px;padding:9px 13px;margin:-2px 0 12px;font-size:.85rem;color:#1d6b43">'
+    +'\uD83D\uDCC5 Extrato (OFX) j\u00e1 importado at\u00e9 <b>'+fmtData(ultimo.data_fim)+'</b>. Pr\u00f3ximo: a partir de <b>'+fmtData(prox)+'</b>. '
+    +'<span style="color:var(--muted);font-weight:400">(repetidas n\u00e3o duplicam \u2014 cada uma tem ID \u00fanico do banco)</span></div>';
+}
+function renderImportacoes(){
+  var m=document.getElementById('main');
+  var h='<h1 class="page">Importa\u00e7\u00f5es \u00b7 '+UNIT_LABEL[UNIT]+'</h1><div class="page-sub">Hist\u00f3rico do que j\u00e1 entrou, pra n\u00e3o importar o mesmo per\u00edodo de novo.</div>';
+  var ofx=(IMPORTS||[]).filter(function(i){return i.tipo==='OFX' && i.data_fim;});
+  if(ofx.length){
+    var ultimo=ofx.reduce(function(a,b){ return (a.data_fim>=b.data_fim)?a:b; });
+    var prox=addDias(ultimo.data_fim,1);
+    h+='<div style="background:#eef9f1;border:1.5px solid #9fd3b4;border-radius:12px;padding:14px 16px;margin-bottom:16px">'
+      +'<div style="font-size:1rem;color:#1d6b43;font-weight:700">\uD83D\uDCC5 Extrato banc\u00e1rio (OFX)</div>'
+      +'<div style="font-size:.9rem;margin-top:4px">J\u00e1 importado at\u00e9 <b>'+fmtData(ultimo.data_fim)+'</b>.</div>'
+      +'<div style="font-size:.9rem;color:#1d6b43;margin-top:2px">\u27a1\ufe0f Pr\u00f3ximo extrato: importe <b>a partir de '+fmtData(prox)+'</b>.</div></div>';
+  } else { h+='<div class="empty" style="margin-bottom:14px">Nenhum extrato OFX importado ainda nesta unidade.</div>'; }
+  if(!IMPORTS.length){ h+='<div class="empty">Nada importado ainda.</div>'; m.innerHTML=h; return; }
+  h+='<table><thead><tr><th>Quando</th><th>Tipo</th><th>Per\u00edodo coberto</th><th style="text-align:right">Qtd</th><th>Por</th></tr></thead><tbody>';
+  IMPORTS.forEach(function(i){
+    var quando=new Date(i.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    var periodo=(i.data_inicio?fmtData(i.data_inicio):'?')+' a '+(i.data_fim?fmtData(i.data_fim):'?');
+    h+='<tr><td>'+quando+'</td><td>'+esc(i.tipo||'')+'</td><td>'+periodo+'</td><td style="text-align:right">'+(i.qtd||0)+'</td><td>'+esc(i.criado_por||'')+'</td></tr>';
+  });
+  h+='</tbody></table>';
+  m.innerHTML=h;
+}
 function mesesDisponiveis(){ const s=new Set(LANC.map(l=>l.competencia)); s.add(fechMes); return [...s].sort().reverse(); }
 function renderFech(){
   const m=document.getElementById('main');
@@ -536,7 +574,7 @@ function parseNFe(xml){
   return {chave:chave,emitente:emitente,cnpj:cnpj,numero:numero,dataEmissao:dataEmissao,total:total,itens:itens,vencimentos:vencs};
 }
 async function importarNFe(files){
-  var okN=0,dupN=0,errN=0;
+  var okN=0,dupN=0,errN=0,_datas=[];
   for(var i=0;i<files.length;i++){
     try{
       var xml=await files[i].text();
@@ -544,9 +582,11 @@ async function importarNFe(files){
       if(!nf||!nf.chave){ errN++; continue; }
       if(NOTAS.some(function(n){return n.chave===nf.chave;})){ dupN++; continue; }
       await rpc('fin_nota_save',{p:{chave:nf.chave,unit:UNIT,emitente:nf.emitente,cnpj:nf.cnpj,numero:nf.numero,data_emissao:nf.dataEmissao,valor_total:nf.total,vencimentos:nf.vencimentos,itens:nf.itens}});
+      if(nf.dataEmissao)_datas.push(String(nf.dataEmissao).slice(0,10));
       okN++;
     }catch(e){ errN++; }
   }
+  if(okN){ _datas.sort(); try{ await rpc('fin_import_save',{p:{unit:UNIT,tipo:'NF-e',data_inicio:_datas[0]||'',data_fim:_datas[_datas.length-1]||'',qtd:okN,criado_por:ADMIN.name}}); }catch(e){} }
   await carregar();
   if(okN) showView('notas');
   toast(okN+' nota(s) importada(s)'+(dupN?(' · '+dupN+' já existiam'):'')+(errN?(' · '+errN+' com erro'):'')+(okN?' — vincule na aba Notas fiscais':''));
