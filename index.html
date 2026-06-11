@@ -157,6 +157,8 @@ const UNIT_LABEL={mac:'Lola MAC', ccmq:'Cozinha Central'};
 
 let ADMIN={name:'', hash:''};
 let UNIT='mac';
+try{var _pu=new URLSearchParams(location.search).get('unit'); if(_pu==='mac'||_pu==='ccmq')UNIT=_pu;}catch(e){}
+window.addEventListener('message',function(e){ try{ var d=e.data; if(d&&d.type==='lola-fin-unit'&&(d.unit==='mac'||d.unit==='ccmq')){ var ap=document.getElementById('app'); if(ap&&ap.classList.contains('show')){ if(typeof setUnit==='function')setUnit(d.unit); } else { UNIT=d.unit; } } }catch(_){} });
 let VIEW='lanc';
 let LANC=[];
 let NOTAS=[];
@@ -218,6 +220,8 @@ async function iniciar(){
   document.getElementById('gate').classList.add('hidden');
   document.getElementById('app').classList.add('show');
   document.getElementById('who').textContent=ADMIN.name+' · admin';
+  var _m=document.getElementById('u-mac'),_c=document.getElementById('u-ccmq');
+  if(_m)_m.classList.toggle('active',UNIT==='mac'); if(_c)_c.classList.toggle('active',UNIT==='ccmq');
   await carregarPlano();
   await carregar();
 }
