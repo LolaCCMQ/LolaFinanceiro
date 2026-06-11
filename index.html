@@ -652,15 +652,32 @@ function renderNotas(){
 function modalVincular(chave){
   var n=NOTAS.find(function(x){return x.chave===chave;}); if(!n)return;
   var tot=Math.abs(parseFloat(n.valor_total)||0);
+  window.__vkTot=tot;
   var cands=LANC.filter(function(l){return !l.nota_chave;}).slice();
   cands.sort(function(a,b){ return Math.abs(Math.abs(+a.amount)-tot)-Math.abs(Math.abs(+b.amount)-tot); });
-  cands=cands.slice(0,40);
-  var opts=cands.map(function(l){ var igual=Math.abs(Math.abs(+l.amount)-tot)<0.01?' ✓ valor igual':''; return '<option value="'+l.id+'">'+fmtData(l.date)+' · '+R(l.amount)+' · '+esc((l.memo||'').slice(0,42))+igual+'</option>'; }).join('');
-  if(!opts){ opts='<option value="">(nenhum pagamento disponível — importe o OFX)</option>'; }
+  window.__vkCands=cands;
+  var sugestao=(n.emitente||'').split(/\s+/)[0]||'';
   openModal('<h2>Vincular nota ao pagamento</h2><div class="page-sub" style="margin-bottom:12px">'+esc(n.emitente||'')+' · NF '+esc(n.numero||'')+' · Total '+R(n.valor_total)+'</div>'
-    +'<div class="fg"><label>Pagamento no extrato (mais próximos do valor primeiro)</label><select class="in" id="vkLanc">'+opts+'</select></div>'
+    +'<div class="fg"><label>\uD83D\uDD0D Buscar pagamento (nome do fornecedor, valor, data...)</label><input class="in" id="vkBusca" placeholder="Ex: '+esc(sugestao)+'..." oninput="filtrarVkLanc()" autocomplete="off"></div>'
+    +'<div class="fg"><label>Pagamento no extrato (mais próximos do valor primeiro)</label><select class="in" id="vkLanc" size="8" style="height:auto">'+buildVkOptions('')+'</select></div>'
     +'<div class="fg"><label>Categoria (aplica ao lançamento ao vincular)</label><select class="in" id="vkCat">'+catOptions('')+'</select></div>'
     +'<div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-g" onclick="closeModal()">Cancelar</button><button class="btn btn-p" onclick="confirmarVinculo(\''+chave+'\')">Vincular</button></div>');
+}
+function _vkNorm(s){ return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,''); }
+function buildVkOptions(filtro){
+  var tot=window.__vkTot||0;
+  var f=_vkNorm(filtro);
+  var list=(window.__vkCands||[]).filter(function(l){
+    if(!f) return true;
+    var hay=_vkNorm((l.memo||'')+' '+R(l.amount)+' '+fmtData(l.date));
+    return hay.indexOf(f)>=0;
+  }).slice(0,60);
+  if(!list.length) return '<option value="">(nenhum pagamento '+(f?'encontrado':'disponível — importe o OFX')+')</option>';
+  return list.map(function(l){ var igual=Math.abs(Math.abs(+l.amount)-tot)<0.01?' ✓ valor igual':''; return '<option value="'+l.id+'">'+fmtData(l.date)+' · '+R(l.amount)+' · '+esc((l.memo||'').slice(0,42))+igual+'</option>'; }).join('');
+}
+function filtrarVkLanc(){
+  var b=document.getElementById('vkBusca'); var sel=document.getElementById('vkLanc');
+  if(sel) sel.innerHTML=buildVkOptions(b?b.value:'');
 }
 async function confirmarVinculo(chave){
   var lancId=document.getElementById('vkLanc').value; var cat=document.getElementById('vkCat').value;
