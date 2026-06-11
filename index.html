@@ -41,14 +41,14 @@
   .nav:hover{background:var(--warm)}
   .nav.active{background:var(--vinho-pale);color:var(--vinho)}
   .main{flex:1;padding:22px 26px;overflow-y:auto;min-width:0}
-  .topnav{display:flex;gap:4px;background:#fff;border-bottom:1.5px solid var(--border);padding:6px 16px;flex-wrap:wrap}
-  .tnav{padding:8px 14px;border:none;background:none;font-family:inherit;font-size:.86rem;font-weight:600;color:var(--ink);cursor:pointer;border-radius:8px}
-  .tnav:hover{background:var(--warm)}
-  .tnav.active{background:var(--vinho-pale);color:var(--vinho)}
+  .topnav{display:flex;gap:8px;background:#fff;border-bottom:1.5px solid var(--border);padding:11px 16px;flex-wrap:wrap}
+  .tnav{padding:8px 16px;border:1.5px solid var(--border);background:#fff;font-family:inherit;font-size:.84rem;font-weight:600;color:var(--vinho);cursor:pointer;border-radius:40px;transition:all .15s}
+  .tnav:hover{background:var(--vinho-pale);border-color:var(--vinho-muted,#d9b3ba)}
+  .tnav.active{background:var(--vinho);color:#fff;border-color:var(--vinho)}
   h1.page{font-family:'Inter','Nunito',system-ui,sans-serif;font-style:normal;font-weight:700;color:var(--vinho);font-size:1.45rem;margin-bottom:2px}
   .page-sub{color:var(--muted);font-size:.85rem;margin-bottom:18px}
   .bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-  .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 15px;border-radius:9px;border:none;font-family:inherit;font-size:.84rem;font-weight:700;cursor:pointer;transition:all .15s}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:10px;border:none;font-family:inherit;font-size:.84rem;font-weight:700;cursor:pointer;transition:all .15s}
   .btn-p{background:var(--vinho);color:#fff}.btn-p:hover{background:var(--vinho-deep)}
   .btn-o{background:#fff;border:1.5px solid var(--vinho);color:var(--vinho)}.btn-o:hover{background:var(--vinho-pale)}
   .btn-g{background:var(--warm);color:var(--ink);border:1.5px solid var(--border)}
@@ -56,13 +56,15 @@
   .btn-sm{padding:5px 10px;font-size:.76rem}
   input.in,select.in,textarea.in{font-family:inherit;font-size:.85rem;border:1.5px solid var(--border);border-radius:8px;padding:8px 10px;background:#fff;color:var(--ink);outline:none}
   input.in:focus,select.in:focus,textarea.in:focus{border-color:var(--vinho)}
-  table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;border:1.5px solid var(--border)}
-  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--warm);padding:9px 10px;text-align:left;white-space:nowrap}
-  td{padding:7px 10px;font-size:.82rem;border-top:1px solid var(--border);vertical-align:middle}
+  table{width:100%;border-collapse:separate;border-spacing:0;background:#fff;border-radius:14px;overflow:hidden;border:1.5px solid var(--border);box-shadow:0 2px 10px rgba(139,38,53,.05)}
+  th{font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--vinho-pale);padding:11px 10px;text-align:left;white-space:nowrap}
+  td{padding:9px 10px;font-size:.82rem;border-top:1px solid var(--border);vertical-align:middle}
+  tbody tr:hover td{background:var(--vinho-pale)}
+  tbody tr{transition:background .12s}
   tr:hover td{background:#fcfafa}
   .val-pos{color:var(--green);font-weight:700;white-space:nowrap}
   .val-neg{color:var(--red);font-weight:700;white-space:nowrap}
-  .pill{font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:20px;background:var(--warm);color:var(--muted)}
+  .pill{font-size:.7rem;font-weight:700;padding:3px 10px;border-radius:20px;background:var(--warm);color:var(--muted)}
   .empty{text-align:center;color:var(--muted);padding:40px 16px;font-size:.9rem}
   .modal-bg{display:none;position:fixed;inset:0;background:rgba(28,8,8,.45);z-index:200;align-items:center;justify-content:center;padding:16px}
   .modal-bg.open{display:flex}
@@ -194,7 +196,7 @@ async function rpc(fn,args){
 
 async function carregarNomes(){
   try{
-    const res=await fetch(SUPA_URL+'/rest/v1/rpc/portal_login_names',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY},body:'{}'});
+    const res=await fetch(SUPA_URL+'/rest/v1/rpc/portal_admin_names',{method:'POST',headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY},body:'{}'});
     const data=await res.json();
     if(Array.isArray(data)){
       const sel=document.getElementById('gName');
